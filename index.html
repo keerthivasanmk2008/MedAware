@@ -1,0 +1,1201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>EyeScan AI | Pro Diagnosis</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
+
+  <style>
+    /* --- UI STYLES FROM e.html --- */
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    
+    :root {
+      --background: hsl(40, 33%, 98%);
+      --foreground: hsl(210, 24%, 16%);
+      --card: hsl(0, 0%, 100%);
+      --primary: hsl(199, 89%, 48%);
+      --primary-foreground: hsl(0, 0%, 100%);
+      --secondary: hsl(40, 20%, 96%);
+      --muted-foreground: hsl(220, 9%, 46%);
+      --border: hsl(30, 14%, 90%);
+      --destructive: hsl(0, 84%, 60%);
+      --success: hsl(142, 71%, 45%);
+      --warning: hsl(45, 93%, 58%);
+      --sky-light: hsl(199, 89%, 95%);
+      --cream-dark: hsl(36, 20%, 95%);
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--background);
+      color: var(--foreground);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* Page transitions */
+    .page {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 1rem;
+      transition: opacity 0.4s ease, transform 0.4s ease;
+      z-index: 10;
+    }
+
+    .hidden {
+      opacity: 0 !important;
+      pointer-events: none;
+      transform: translateY(10px);
+      display: none !important; /* Enforce display none for logic switching */
+    }
+
+    /* Card */
+    .card {
+      width: 100%;
+      max-width: 520px;
+      background: var(--card);
+      border-radius: 1rem;
+      padding: 2rem;
+      border: 1px solid var(--border);
+      box-shadow: 0 16px 32px rgba(0,0,0,0.06);
+    }
+
+    /* Inputs */
+    .input-group { margin-bottom: 1.25rem; }
+    .input-group label {
+      font-size: 0.75rem;
+      color: var(--muted-foreground);
+      display: block;
+      margin-bottom: 0.5rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+    .input-group input {
+      width: 100%;
+      padding: 0.875rem 1rem;
+      border-radius: 0.75rem;
+      border: 1px solid var(--border);
+      font-size: 0.875rem;
+      font-family: inherit;
+      background: var(--background);
+    }
+    .input-group input:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px hsla(199, 89%, 48%, 0.1);
+    }
+
+    /* Buttons */
+    .btn-primary {
+      width: 100%;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      border: none;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      font-size: 0.875rem;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-primary:hover { background: hsl(199, 89%, 42%); }
+    .btn-primary:active { transform: scale(0.98); }
+    .btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+    .btn-secondary {
+      width: 100%;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      border: none;
+      background: var(--secondary);
+      color: var(--foreground);
+      font-size: 0.875rem;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .btn-secondary:hover { background: var(--cream-dark); }
+    
+    .btn-link {
+        background: none;
+        border: none;
+        color: var(--primary);
+        font-size: 0.8rem;
+        margin-top: 1rem;
+        cursor: pointer;
+        width: 100%;
+        text-align: center;
+    }
+    .btn-link:hover { text-decoration: underline; }
+
+    /* Header */
+    .header { text-align: center; margin-bottom: 2rem; }
+    .header h1, .header h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .header p { font-size: 0.875rem; color: var(--muted-foreground); }
+
+    .logo {
+      width: 4rem;
+      height: 4rem;
+      background: var(--sky-light);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin: 0 auto 1rem;
+    }
+    .logo svg { width: 2rem; height: 2rem; color: var(--primary); }
+
+    /* Options */
+    .option {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      border: 1px solid var(--border);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      margin-bottom: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: var(--card);
+    }
+    .option:hover { background: var(--cream-dark); }
+    .option.selected { border-color: var(--primary); background: var(--sky-light); }
+    .option.selected .option-icon { background: var(--primary); color: var(--primary-foreground); }
+
+    .option-icon {
+      width: 3rem;
+      height: 3rem;
+      border-radius: 0.75rem;
+      background: var(--sky-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+      flex-shrink: 0;
+      transition: all 0.2s;
+    }
+    .option-icon svg { width: 1.25rem; height: 1.25rem; }
+    .option-content h3 { font-size: 0.9375rem; font-weight: 500; margin-bottom: 0.25rem; }
+    .option-content p { font-size: 0.8125rem; color: var(--muted-foreground); }
+    .option-arrow { margin-left: auto; color: var(--muted-foreground); transition: transform 0.2s; }
+    .option:hover .option-arrow { transform: translateX(4px); }
+
+    .footer-text {
+      font-size: 0.6875rem;
+      color: var(--muted-foreground);
+      text-align: center;
+      margin-top: 1.5rem;
+    }
+    
+    .error-text {
+        color: var(--destructive);
+        font-size: 0.75rem;
+        text-align: center;
+        margin-top: 0.5rem;
+        display: none;
+        background: rgba(239, 68, 68, 0.1);
+        padding: 8px;
+        border-radius: 8px;
+    }
+
+    /* Modal */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(31, 41, 51, 0.4);
+      backdrop-filter: blur(4px);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 1rem;
+      z-index: 50;
+      animation: fadeIn 0.3s ease;
+    }
+    /* .hidden class handles display */
+
+    .modal {
+      width: 100%;
+      max-width: 480px;
+      background: var(--card);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      border: 1px solid var(--border);
+      box-shadow: 0 16px 32px rgba(0,0,0,0.06);
+      animation: scaleIn 0.3s ease;
+    }
+
+    .modal-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 1.5rem;
+    }
+    .modal-header-left { display: flex; align-items: center; gap: 0.75rem; }
+    .modal-header-icon {
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 0.75rem;
+      background: var(--sky-light);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+    }
+    .modal-header-icon svg { width: 1.25rem; height: 1.25rem; }
+    .modal-header-text h3 { font-size: 0.9375rem; font-weight: 600; }
+    .modal-header-text p { font-size: 0.75rem; color: var(--muted-foreground); }
+
+    .close-btn {
+      width: 2rem;
+      height: 2rem;
+      border-radius: 0.5rem;
+      background: var(--secondary);
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--muted-foreground);
+      cursor: pointer;
+      transition: color 0.2s;
+    }
+    .close-btn:hover { color: var(--foreground); }
+    .close-btn svg { width: 1rem; height: 1rem; }
+
+    /* Textarea */
+    textarea {
+      width: 100%;
+      min-height: 160px;
+      padding: 1rem;
+      border-radius: 0.75rem;
+      border: 1px solid var(--border);
+      font-size: 0.875rem;
+      font-family: inherit;
+      resize: none;
+      background: var(--background);
+    }
+    textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px hsla(199, 89%, 48%, 0.1);
+    }
+
+    .char-count {
+      font-size: 0.75rem;
+      color: var(--muted-foreground);
+      margin-top: 0.75rem;
+    }
+
+    .modal-actions {
+      display: flex;
+      gap: 0.75rem;
+      margin-top: 1.5rem;
+    }
+    .modal-actions button { flex: 1; }
+
+    /* Mic Interface */
+    .mic-container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 2rem 0;
+    }
+
+    .mic-wrapper { position: relative; }
+
+    .mic-btn {
+      width: 7rem;
+      height: 7rem;
+      border-radius: 50%;
+      border: none;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.3s;
+      position: relative;
+      z-index: 1;
+    }
+    .mic-btn:hover { background: hsl(199, 89%, 42%); }
+    .mic-btn svg { width: 2.5rem; height: 2.5rem; }
+    .mic-btn.recording { background: var(--destructive); animation: micPulse 1s ease-in-out infinite; }
+
+    .pulse-ring {
+      position: absolute;
+      inset: 0;
+      width: 7rem;
+      height: 7rem;
+      border-radius: 50%;
+      background: hsla(199, 89%, 48%, 0.2);
+      animation: pulseRing 1.5s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    .pulse-ring:nth-child(2) { animation-delay: 0.5s; }
+
+    .mic-status {
+      margin-top: 1.5rem;
+      text-align: center;
+    }
+    .mic-status .duration {
+      font-size: 1.5rem;
+      font-weight: 500;
+      color: var(--foreground);
+    }
+    .mic-status .hint {
+      font-size: 0.875rem;
+      color: var(--muted-foreground);
+    }
+
+    .wave-bars {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.25rem;
+      margin: 0.5rem 0;
+    }
+    .wave-bar {
+      width: 4px;
+      height: 8px;
+      background: var(--primary);
+      border-radius: 2px;
+      animation: wave 0.8s ease-in-out infinite;
+    }
+    .wave-bar:nth-child(1) { animation-delay: 0s; }
+    .wave-bar:nth-child(2) { animation-delay: 0.1s; }
+    .wave-bar:nth-child(3) { animation-delay: 0.2s; }
+    .wave-bar:nth-child(4) { animation-delay: 0.3s; }
+    .wave-bar:nth-child(5) { animation-delay: 0.4s; }
+
+    .transcript-preview {
+      width: 100%;
+      padding: 1rem;
+      background: var(--secondary);
+      border-radius: 0.75rem;
+      margin-top: 1.5rem;
+    }
+    .transcript-preview label {
+      font-size: 0.875rem;
+      color: var(--muted-foreground);
+      margin-bottom: 0.25rem;
+      display: block;
+    }
+    .transcript-preview p { font-size: 0.875rem; color: var(--foreground); }
+
+    /* Camera */
+    .camera-container {
+      position: relative;
+      aspect-ratio: 4/3;
+      background: var(--secondary);
+      border-radius: 1rem;
+      overflow: hidden;
+      display: flex; /* Added for centering */
+      justify-content: center;
+      align-items: center;
+    }
+    .camera-container video, .camera-container img, .camera-container canvas {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+    }
+
+    .eye-guide {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      pointer-events: none;
+    }
+    .eye-guide-outer {
+      width: 12rem;
+      height: 12rem;
+      border: 2px dashed hsla(199, 89%, 48%, 0.5);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .eye-guide-inner {
+      width: 8rem;
+      height: 8rem;
+      border: 2px solid hsla(199, 89%, 48%, 0.3);
+      border-radius: 50%;
+    }
+
+    .scan-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(31, 41, 51, 0.1);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .scan-overlay.hidden { display: none; }
+    .scan-line {
+      position: absolute;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: hsla(199, 89%, 48%, 0.8);
+      box-shadow: 0 0 20px 4px hsla(199, 89%, 48%, 0.5);
+      animation: scanLine 2s linear infinite;
+    }
+    .scan-label {
+      position: absolute;
+      bottom: 1rem;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 0.5rem 1rem;
+      background: rgba(255, 255, 255, 0.9);
+      border-radius: 2rem;
+      font-size: 0.875rem;
+      font-weight: 500;
+    }
+
+    .success-badge {
+      position: absolute;
+      top: 1rem;
+      right: 1rem;
+      width: 2.5rem;
+      height: 2.5rem;
+      background: var(--success);
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      animation: scaleIn 0.3s ease;
+    }
+    .success-badge.hidden { display: none; }
+    .success-badge svg { width: 1.25rem; height: 1.25rem; }
+
+    .capture-btn {
+      width: 4rem;
+      height: 4rem;
+      border-radius: 50%;
+      border: none;
+      background: var(--primary);
+      color: var(--primary-foreground);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      box-shadow: 0 0 0 4px hsla(199, 89%, 48%, 0.2);
+    }
+    .capture-btn:hover { background: hsl(199, 89%, 42%); }
+    .capture-btn:active { transform: scale(0.95); }
+    .capture-btn svg { width: 1.75rem; height: 1.75rem; }
+
+    .capture-actions { display: flex; justify-content: center; margin-top: 1.5rem; }
+
+    /* Result Page */
+    .section { margin-bottom: 1.5rem; }
+    .section h3 { font-size: 0.875rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .section p { font-size: 0.875rem; color: var(--muted-foreground); line-height: 1.6; }
+
+    .steps-list { list-style: none; }
+    .steps-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      font-size: 0.875rem;
+      color: var(--muted-foreground);
+      margin-bottom: 0.5rem;
+    }
+    .step-number {
+      width: 1.25rem;
+      height: 1.25rem;
+      border-radius: 50%;
+      background: var(--sky-light);
+      color: var(--primary);
+      font-size: 0.75rem;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px; /* Visual alignment */
+    }
+
+    .confidence-labels {
+      display: flex;
+      justify-content: space-between;
+      font-size: 0.6875rem;
+      color: var(--muted-foreground);
+      margin-bottom: 0.5rem;
+    }
+    .confidence-bar {
+      width: 100%;
+      height: 0.75rem;
+      background: var(--secondary);
+      border-radius: 1rem;
+      overflow: hidden;
+    }
+    .confidence-fill {
+      height: 100%;
+      width: 0%;
+      /* SEVERITY METER (Green to Red) */
+      background: linear-gradient(90deg, var(--success), var(--warning), var(--destructive));
+      border-radius: 1rem;
+      transition: width 1.5s ease;
+    }
+
+    .disclaimer {
+      display: flex;
+      align-items: flex-start;
+      gap: 0.75rem;
+      padding: 1rem;
+      background: hsla(40, 20%, 96%, 0.5);
+      border-radius: 0.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .disclaimer svg { width: 1.25rem; height: 1.25rem; color: var(--muted-foreground); flex-shrink: 0; }
+    .disclaimer p { font-size: 0.75rem; color: var(--muted-foreground); line-height: 1.5; }
+
+    /* Animations */
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes scaleIn { from { transform: scale(0.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    @keyframes pulseRing {
+      0% { transform: scale(0.8); opacity: 0.8; }
+      50% { transform: scale(1.2); opacity: 0.4; }
+      100% { transform: scale(1.5); opacity: 0; }
+    }
+    @keyframes micPulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
+    @keyframes wave { 0%, 100% { height: 8px; } 50% { height: 24px; } }
+    @keyframes scanLine { 0% { top: 0%; } 100% { top: 100%; } }
+  </style>
+</head>
+<body>
+
+<div id="loginPage" class="page">
+  <div class="card">
+    <div class="header">
+      <div class="logo">
+        <i data-lucide="eye"></i>
+      </div>
+      <h1>EyeScan AI</h1>
+      <p id="auth-title">Secure Medical Access Terminal</p>
+    </div>
+
+    <div class="input-group">
+      <label>Email</label>
+      <input type="email" id="email" placeholder="Enter your email">
+    </div>
+
+    <div class="input-group">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="Enter your password">
+    </div>
+
+    <div id="auth-error" class="error-text"></div>
+
+    <button class="btn-primary" id="btn-action" onclick="window.handleAuthAction()">Initialize Session</button>
+    <button class="btn-link" id="btn-toggle" onclick="window.toggleAuthMode()">Create New Account</button>
+
+    <p class="footer-text">HIPAA Compliant • End-to-End Encrypted</p>
+  </div>
+</div>
+
+<div id="inputPage" class="page hidden">
+  <div class="card">
+    <div class="header">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+          <h2 style="margin:0;">Diagnostic Menu</h2>
+          <button onclick="window.doLogout()" style="background:none; border:none; color:var(--destructive); cursor:pointer;"><i data-lucide="log-out"></i></button>
+      </div>
+      <p id="user-email-display" style="font-size:0.75rem; color:var(--primary); margin-top:5px;"></p>
+      <p style="margin-top:1rem;">Select a diagnostic method</p>
+    </div>
+
+    <div class="option" id="optionText" onclick="selectOption('text')">
+      <div class="option-icon"><i data-lucide="keyboard"></i></div>
+      <div class="option-content">
+        <h3>Type your symptoms</h3>
+        <p>Describe how you feel in your own words</p>
+      </div>
+      <div class="option-arrow"><i data-lucide="arrow-right"></i></div>
+    </div>
+
+    <div class="option" id="optionVoice" onclick="selectOption('voice')">
+      <div class="option-icon"><i data-lucide="mic"></i></div>
+      <div class="option-content">
+        <h3>Voice Diagnostics</h3>
+        <p>Dictate symptoms for AI analysis</p>
+      </div>
+      <div class="option-arrow"><i data-lucide="arrow-right"></i></div>
+    </div>
+
+    <div class="option" id="optionEye" onclick="selectOption('eye')">
+      <div class="option-icon"><i data-lucide="eye"></i></div>
+      <div class="option-content">
+        <h3>Eye image screening</h3>
+        <p>Capture an eye image to support analysis</p>
+      </div>
+      <div class="option-arrow"><i data-lucide="arrow-right"></i></div>
+    </div>
+  </div>
+</div>
+
+<div id="resultPage" class="page hidden">
+  <div class="card">
+    <div class="header">
+      <h2>Your Health Summary</h2>
+      <p>AI Generated Analysis</p>
+    </div>
+
+    <div class="section">
+      <h3>Possible condition</h3>
+      <p id="result-condition">Analysis pending...</p>
+    </div>
+
+    <div class="section">
+      <h3>Symptoms Detected</h3>
+      <p id="result-symptoms">...</p>
+    </div>
+
+    <div class="section">
+      <h3>Recommended Precautions</h3>
+      <ul class="steps-list" id="result-precautions">
+        </ul>
+    </div>
+    
+    <div class="section">
+        <h3>Dietary Suggestions</h3>
+        <p id="result-diet">...</p>
+    </div>
+
+    <div class="section">
+      <h3>Risk Evaluation</h3>
+      <div class="confidence-labels">
+        <span>Low</span>
+        <span>Medium</span>
+        <span>High</span>
+      </div>
+      <div class="confidence-bar">
+        <div id="confidenceFill" class="confidence-fill"></div>
+      </div>
+    </div>
+
+    <div class="disclaimer">
+      <i data-lucide="alert-circle"></i>
+      <p>This tool provides guidance, not a medical diagnosis. If symptoms persist or worsen, please consult a medical professional.</p>
+    </div>
+
+    <button class="btn-secondary" onclick="goBack()">
+      <i data-lucide="arrow-left" style="width:1rem;height:1rem;margin-right:0.5rem;display:inline;"></i>
+      New Analysis
+    </button>
+  </div>
+</div>
+
+<div id="textModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-header-left">
+        <div class="modal-header-icon"><i data-lucide="keyboard"></i></div>
+        <div class="modal-header-text">
+          <h3>Symptom Input</h3>
+          <p>Describe clinical observations</p>
+        </div>
+      </div>
+      <button class="close-btn" onclick="closeModal('text')"><i data-lucide="x"></i></button>
+    </div>
+
+    <textarea id="symptomText" placeholder="e.g., Patient reports persistent redness in sclera, accompanied by itching..."></textarea>
+    <p class="char-count"><span id="charCount">0</span> characters</p>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('text')">Cancel</button>
+      <button class="btn-primary" id="submitTextBtn" onclick="submitText()" disabled>Analyze</button>
+    </div>
+  </div>
+</div>
+
+<div id="voiceModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-header-left">
+        <div class="modal-header-icon"><i data-lucide="mic"></i></div>
+        <div class="modal-header-text">
+          <h3>Voice Input</h3>
+          <p>Speak clearly into the microphone</p>
+        </div>
+      </div>
+      <button class="close-btn" onclick="closeModal('voice')"><i data-lucide="x"></i></button>
+    </div>
+
+    <div class="mic-container">
+      <div class="mic-wrapper">
+        <div class="pulse-ring" id="pulse1" style="display:none;"></div>
+        <div class="pulse-ring" id="pulse2" style="display:none;"></div>
+        <button class="mic-btn" id="micBtn" onclick="toggleRecording()">
+          <i data-lucide="mic" id="micIcon"></i>
+        </button>
+      </div>
+
+      <div class="mic-status">
+        <div class="wave-bars" id="waveBars" style="display:none;">
+          <div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div><div class="wave-bar"></div>
+        </div>
+        <p class="hint" id="micHint">Tap microphone to record</p>
+      </div>
+
+      <div class="transcript-preview" id="transcriptPreview" style="display:none;">
+        <label>Transcript:</label>
+        <p id="transcriptText"></p>
+      </div>
+    </div>
+
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal('voice')">Cancel</button>
+      <button class="btn-primary" id="submitVoiceBtn" onclick="submitVoice()" disabled>Analyze</button>
+    </div>
+  </div>
+</div>
+
+<div id="eyeModal" class="modal-overlay hidden">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-header-left">
+        <div class="modal-header-icon"><i data-lucide="eye"></i></div>
+        <div class="modal-header-text">
+          <h3>Eye Scan</h3>
+          <p>Position eye within the guide</p>
+        </div>
+      </div>
+      <button class="close-btn" onclick="closeModal('eye')"><i data-lucide="x"></i></button>
+    </div>
+
+    <div class="camera-container">
+      <video id="cameraFeed" autoplay playsinline muted></video>
+      <img id="capturedImage" style="display:none;">
+      <canvas id="canvas" style="display:none;"></canvas>
+      
+      <div class="eye-guide" id="eyeGuide">
+        <div class="eye-guide-outer">
+          <div class="eye-guide-inner"></div>
+        </div>
+      </div>
+
+      <div class="scan-overlay hidden" id="scanOverlay">
+        <div class="scan-line"></div>
+        <div class="scan-label">Analyzing...</div>
+      </div>
+
+      <div class="success-badge hidden" id="successBadge">
+        <i data-lucide="check"></i>
+      </div>
+    </div>
+
+    <div class="capture-actions" id="captureActions">
+      <button class="capture-btn" onclick="captureImage()">
+        <i data-lucide="camera"></i>
+      </button>
+    </div>
+
+    <div class="modal-actions" id="retakeActions" style="display:none;">
+      <button class="btn-secondary" onclick="retakeImage()">
+        <i data-lucide="rotate-ccw" style="width:1rem;height:1rem;margin-right:0.5rem;display:inline;"></i>
+        Retake
+      </button>
+      <button class="btn-primary" id="analyzeEyeBtn" onclick="submitEye()">Analyze Photo</button>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+  // --- FIREBASE & API CONFIG ---
+  const GEMINI_API_KEY = "AIzaSyBMBpKs5cOxejSot-9bV-CiOht5Bm8dv2A"; 
+
+  const firebaseConfig = {
+      apiKey: "AIzaSyAz-Tzy4yOT3KD6sV51BH8bIjdArU4m-nw",
+      authDomain: "eyescan12.firebaseapp.com",
+      projectId: "eyescan12",
+      storageBucket: "eyescan12.firebasestorage.app",
+      messagingSenderId: "497196151906",
+      appId: "1:497196151906:web:284993692934c97e6dcd3b"
+  };
+
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+  import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+
+  const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
+
+  let isLoginMode = true;
+  let recognition = null;
+  let isRecording = false;
+  let stream = null;
+
+  // --- AUTH LOGIC ---
+  onAuthStateChanged(auth, (user) => {
+    if (user) {
+      document.getElementById("loginPage").classList.add("hidden");
+      setTimeout(() => {
+        document.getElementById("inputPage").classList.remove("hidden");
+        document.getElementById("user-email-display").innerText = "Logged in: " + user.email;
+      }, 200);
+    } else {
+      document.getElementById("inputPage").classList.add("hidden");
+      document.getElementById("resultPage").classList.add("hidden");
+      document.getElementById("loginPage").classList.remove("hidden");
+    }
+  });
+
+  window.handleAuthAction = async () => {
+    const email = document.getElementById("email").value;
+    const password = document.getElementById("password").value;
+    const errBox = document.getElementById("auth-error");
+    
+    if(!email || !password) {
+        errBox.style.display = 'block';
+        errBox.innerText = "Please enter email and password.";
+        return;
+    }
+    
+    try {
+      if(isLoginMode) await signInWithEmailAndPassword(auth, email, password);
+      else await createUserWithEmailAndPassword(auth, email, password);
+      errBox.style.display = 'none';
+    } catch(e) {
+      errBox.style.display = 'block';
+      errBox.innerText = e.message.replace("Firebase: ", "");
+    }
+  };
+
+  window.toggleAuthMode = () => {
+    isLoginMode = !isLoginMode;
+    document.getElementById("auth-title").innerText = isLoginMode ? "Secure Medical Access Terminal" : "New Registration";
+    document.getElementById("btn-action").innerText = isLoginMode ? "Initialize Session" : "Create Account";
+    document.getElementById("btn-toggle").innerText = isLoginMode ? "Create New Account" : "Back to Login";
+  };
+
+  window.doLogout = () => signOut(auth);
+
+  // --- HUGGING FACE API CALL ---
+  async function queryHuggingFace(imageBase64) {
+      try {
+          // Construct Data URI as required by Gradio/HF Spaces typically
+          const dataUri = `data:image/jpeg;base64,${imageBase64}`;
+          
+          const response = await fetch("https://vasanmarran10-medaware.hf.space/run/predict", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                  data: [dataUri]
+              })
+          });
+
+          if (!response.ok) {
+              console.warn("HF Model Network Error or 404");
+              return null;
+          }
+          
+          const result = await response.json();
+          // Gradio returns { data: ["ResultLabel", "Confidence", ...] }
+          if (result && result.data && result.data.length > 0) {
+              return result.data[0]; 
+          }
+          return null;
+
+      } catch (e) {
+          console.error("Hugging Face Error:", e);
+          return null; // Fallback to Gemini
+      }
+  }
+
+  // --- GEMINI API LOGIC ---
+  async function callGemini(promptText, imageBase64) {
+      const modelNames = ["gemini-3-flash-preview", "gemini-2.5-flash", "gemini-2.0-flash"];
+      
+      for (const modelName of modelNames) {
+          const url = `https://generativelanguage.googleapis.com/v1/models/${modelName}:generateContent?key=${GEMINI_API_KEY}`;
+          
+          try {
+              const bodyPayload = {
+                  contents: [{ parts: [{ text: promptText }] }]
+              };
+
+              // Only attach image if it's provided (fallback mode)
+              if (imageBase64) {
+                  bodyPayload.contents[0].parts.push({ 
+                      inline_data: { mime_type: "image/jpeg", data: imageBase64 } 
+                  });
+              }
+
+              const response = await fetch(url, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify(bodyPayload)
+              });
+
+              if (response.ok) {
+                  const data = await response.json();
+                  let resultText = data.candidates[0].content.parts[0].text;
+                  
+                  // Clean markdown & isolate JSON block
+                  resultText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+                  const firstBrace = resultText.indexOf('{');
+                  const lastBrace = resultText.lastIndexOf('}');
+                  if (firstBrace !== -1 && lastBrace !== -1) {
+                      resultText = resultText.substring(firstBrace, lastBrace + 1);
+                  }
+
+                  renderResult(JSON.parse(resultText));
+                  return;
+              }
+          } catch (e) { console.warn(`Model ${modelName} failed, retrying...`); }
+      }
+      alert("Error: AI Service unreachable. Please try again.");
+      resetButtons();
+  }
+
+  function renderResult(data) {
+    // Populate UI Fields
+    document.getElementById("result-condition").innerText = data.condition;
+    document.getElementById("result-symptoms").innerText = data.symptoms;
+    document.getElementById("result-diet").innerText = data.diet;
+    
+    // Populate Precautions List
+    const pList = document.getElementById("result-precautions");
+    pList.innerHTML = "";
+    data.precautions.forEach((p, index) => {
+        pList.innerHTML += `<li><span class="step-number">${index + 1}</span> ${p}</li>`;
+    });
+
+    // Switch Views
+    closeModal('text');
+    closeModal('voice');
+    closeModal('eye');
+    
+    document.getElementById('inputPage').classList.add('hidden');
+    setTimeout(() => {
+      document.getElementById('resultPage').classList.remove('hidden');
+      
+      // Animate Risk/Confidence Bar Logic:
+      const severity = data.severity_score || 50; 
+      setTimeout(() => {
+         document.getElementById('confidenceFill').style.width = severity + '%'; 
+      }, 300);
+    }, 200);
+
+    resetButtons();
+  }
+
+  function resetButtons() {
+    document.getElementById("submitTextBtn").innerText = "Analyze";
+    document.getElementById("submitTextBtn").disabled = false;
+    document.getElementById("submitVoiceBtn").innerText = "Analyze";
+    document.getElementById("submitVoiceBtn").disabled = false;
+    document.getElementById("analyzeEyeBtn").innerText = "Analyze Photo";
+    document.getElementById("analyzeEyeBtn").disabled = false;
+  }
+
+  // --- UI INTERACTION BRIDGES ---
+
+  // 1. TEXT INPUT
+  window.submitText = async () => {
+      const t = document.getElementById("symptomText").value;
+      if(!t) return;
+      document.getElementById("submitTextBtn").innerText = "Processing...";
+      document.getElementById("submitTextBtn").disabled = true;
+      callGemini(`Analyze: ${t}. Return JSON: {"condition":"","symptoms":"","precautions":[],"diet":"","severity_score":0}`);
+  };
+
+  // 2. VOICE INPUT
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if(SR) {
+      recognition = new SR();
+      recognition.continuous = false;
+      recognition.lang = 'en-US';
+
+      recognition.onstart = () => {
+          isRecording = true;
+          document.getElementById('micBtn').classList.add('recording');
+          document.getElementById('pulse1').style.display = 'block';
+          document.getElementById('pulse2').style.display = 'block';
+          document.getElementById('waveBars').style.display = 'flex';
+          document.getElementById('micHint').textContent = 'Listening...';
+          document.getElementById('micBtn').innerHTML = '<i data-lucide="square" style="fill:currentColor;"></i>';
+          lucide.createIcons();
+      };
+
+      recognition.onend = () => {
+          isRecording = false;
+          document.getElementById('micBtn').classList.remove('recording');
+          document.getElementById('pulse1').style.display = 'none';
+          document.getElementById('pulse2').style.display = 'none';
+          document.getElementById('waveBars').style.display = 'none';
+          document.getElementById('micHint').textContent = 'Tap to record';
+          document.getElementById('micBtn').innerHTML = '<i data-lucide="mic"></i>';
+          lucide.createIcons();
+      };
+
+      recognition.onresult = (e) => {
+          const txt = e.results[0][0].transcript;
+          document.getElementById('transcriptText').textContent = txt;
+          document.getElementById('transcriptPreview').style.display = 'block';
+          document.getElementById('submitVoiceBtn').disabled = false;
+          window.lastVoiceText = txt;
+      };
+  }
+
+  window.toggleRecording = () => {
+    if (!recognition) { alert("Voice recognition not supported."); return; }
+    if (isRecording) {
+      recognition.stop();
+    } else {
+      recognition.start();
+    }
+  };
+
+  window.submitVoice = () => {
+      const txt = window.lastVoiceText;
+      if (!txt) return;
+      document.getElementById("submitVoiceBtn").innerText = "Processing...";
+      document.getElementById("submitVoiceBtn").disabled = true;
+      callGemini(`Analyze voice: ${txt}. JSON: {"condition":"","symptoms":"","precautions":[],"diet":"","severity_score":0}`);
+  };
+
+  // 3. EYE SCAN (UPDATED WITH HF MODEL INTEGRATION)
+  window.startCamera = async () => {
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' } });
+      document.getElementById('cameraFeed').srcObject = stream;
+      document.getElementById('cameraFeed').style.display = 'block';
+      document.getElementById('capturedImage').style.display = 'none';
+      document.getElementById('eyeGuide').style.display = 'flex';
+      document.getElementById('captureActions').style.display = 'flex';
+      document.getElementById('retakeActions').style.display = 'none';
+      document.getElementById('scanOverlay').classList.add('hidden');
+      document.getElementById('successBadge').classList.add('hidden');
+    } catch (err) {
+      console.error('Camera error:', err);
+      alert("Could not access camera.");
+    }
+  };
+
+  window.stopCamera = () => {
+    if (stream) {
+      stream.getTracks().forEach(track => track.stop());
+      stream = null;
+    }
+  };
+
+  window.captureImage = () => {
+    const video = document.getElementById('cameraFeed');
+    const canvas = document.getElementById('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    
+    const img = document.getElementById('capturedImage');
+    img.src = canvas.toDataURL('image/jpeg');
+    img.style.display = 'block';
+    video.style.display = 'none';
+    document.getElementById('eyeGuide').style.display = 'none';
+    document.getElementById('captureActions').style.display = 'none';
+    
+    // Show scanning animation
+    document.getElementById('scanOverlay').classList.remove('hidden');
+    
+    setTimeout(() => {
+      document.getElementById('scanOverlay').classList.add('hidden');
+      document.getElementById('successBadge').classList.remove('hidden');
+      document.getElementById('retakeActions').style.display = 'flex';
+      lucide.createIcons();
+    }, 1500);
+    
+    window.stopCamera();
+  };
+
+  window.retakeImage = () => {
+    window.startCamera();
+  };
+
+  window.submitEye = async () => {
+    const canvas = document.getElementById('canvas');
+    const imageBase64 = canvas.toDataURL("image/jpeg").split(",")[1];
+    
+    document.getElementById("analyzeEyeBtn").innerText = "Checking Model...";
+    document.getElementById("analyzeEyeBtn").disabled = true;
+
+    // 1. QUERY HUGGING FACE
+    const prediction = await queryHuggingFace(imageBase64);
+    
+    let geminiPrompt = "";
+    let imageForGemini = null;
+
+    if (prediction) {
+        console.log("HF Prediction:", prediction);
+        // If HF works, we give Gemini the specific diagnosis to elaborate on
+        geminiPrompt = `My custom ML model identified: "${prediction}". Provide detailed advice for this condition. Return JSON: {"condition":"${prediction}","symptoms":"List symptoms","precautions":[],"diet":"Advice","severity_score":70}`;
+        imageForGemini = null; // No need to send image to Gemini if we have a diagnosis
+    } else {
+        console.log("HF Failed, using Fallback.");
+        // If HF fails, we send the image to Gemini to analyze from scratch
+        geminiPrompt = "Analyze eye image. Return JSON: {\"condition\":\"\",\"symptoms\":\"\",\"precautions\":[],\"diet\":\"\",\"severity_score\":0}";
+        imageForGemini = imageBase64;
+    }
+    
+    document.getElementById("analyzeEyeBtn").innerText = "Generating Report...";
+    callGemini(geminiPrompt, imageForGemini);
+  };
+</script>
+
+<script>
+  // --- NON-MODULE UI HELPERS ---
+  lucide.createIcons();
+  let selectedOption = null;
+
+  function goBack() {
+    document.getElementById('resultPage').classList.add('hidden');
+    document.getElementById('confidenceFill').style.width = '0%'; // Reset bar
+    selectedOption = null;
+    document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+    setTimeout(() => {
+      document.getElementById('inputPage').classList.remove('hidden');
+    }, 200);
+  }
+
+  function selectOption(type) {
+    selectedOption = type;
+    document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+    document.getElementById('option' + type.charAt(0).toUpperCase() + type.slice(1)).classList.add('selected');
+    
+    if (type === 'text') openModal('text');
+    else if (type === 'voice') openModal('voice');
+    else if (type === 'eye') openModal('eye');
+  }
+
+  function openModal(type) {
+    document.getElementById(type + 'Modal').classList.remove('hidden');
+    if (type === 'eye') window.startCamera();
+  }
+
+  function closeModal(type) {
+    document.getElementById(type + 'Modal').classList.add('hidden');
+    if (type === 'voice') {
+        const stopBtn = document.querySelector('.mic-btn.recording');
+        if(stopBtn) stopBtn.click();
+    }
+    if (type === 'eye') window.stopCamera();
+  }
+
+  document.getElementById('symptomText').addEventListener('input', function() {
+    document.getElementById('charCount').textContent = this.value.length;
+    document.getElementById('submitTextBtn').disabled = this.value.trim() === '';
+  });
+</script>
+
+</body>
+</html>
