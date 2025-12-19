@@ -92,5 +92,3 @@ The system combines **CNN-based image analysis** with **Google Gemini’s multim
 
 ---
 
-## 📂 Project Structure
-
